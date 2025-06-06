@@ -226,29 +226,49 @@ JSON Response:`;
         // More robust cleanup of markdown code blocks and formatting
         responseText = responseText.trim();
         
-        // Remove markdown code block markers
-        responseText = responseText.replace(/^```json\s*/i, '');
-        responseText = responseText.replace(/^```\s*/i, '');
+        // Remove markdown code block markers at start and end
+        responseText = responseText.replace(/^```(?:json)?\s*/i, '');
         responseText = responseText.replace(/\s*```$/i, '');
         
-        // Remove any backticks that might be in the middle of the text
+        // Remove any remaining backticks
         responseText = responseText.replace(/`/g, '');
         
-        // Find the JSON object by looking for the first { and last }
+        // Remove any text before the first { and after the last }
         const firstBrace = responseText.indexOf('{');
         const lastBrace = responseText.lastIndexOf('}');
         
         if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
             responseText = responseText.substring(firstBrace, lastBrace + 1);
         }
+        
+        // Additional cleanup for common AI response issues
+        responseText = responseText.replace(/\n\s*\n/g, '\n'); // Remove empty lines
+        responseText = responseText.replace(/\\`/g, '`'); // Fix escaped backticks
+        responseText = responseText.replace(/\\\\/g, '\\'); // Fix double escapes
 
         try {
             const companyProfile = JSON.parse(responseText);
             return companyProfile;
         } catch (parseError) {
             console.error('JSON parse error:', parseError);
-            console.error('Response text:', responseText);
-            throw new Error(`Failed to parse AI response as JSON: ${parseError.message}`);
+            console.error('Response text length:', responseText.length);
+            console.error('Response text preview:', responseText.substring(0, 500));
+            console.error('Response text around error position:', responseText.substring(Math.max(0, parseError.message.match(/\d+/) ? parseInt(parseError.message.match(/\d+/)[0]) - 50 : 0), 
+                parseError.message.match(/\d+/) ? parseInt(parseError.message.match(/\d+/)[0]) + 50 : 100));
+            
+            // Try one more cleanup attempt
+            let cleanedText = responseText
+                .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+                .replace(/\\n/g, '\\\\n') // Fix newline escaping
+                .replace(/\\"/g, '\\"') // Ensure quotes are properly escaped
+                .replace(/\\'/g, "'"); // Fix single quote escaping
+                
+            try {
+                const companyProfile = JSON.parse(cleanedText);
+                return companyProfile;
+            } catch (secondParseError) {
+                throw new Error(`Failed to parse AI response as JSON after cleanup: ${parseError.message}. Position: ${parseError.message.match(/\d+/) ? parseError.message.match(/\d+/)[0] : 'unknown'}`);
+            }
         }
 
     } catch (error) {
