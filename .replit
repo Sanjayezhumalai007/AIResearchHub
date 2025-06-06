@@ -9,7 +9,7 @@ deploymentTarget = "autoscale"
 run = ["streamlit", "run", "app.py", "--server.port", "5000"]
 
 [workflows]
-runButton = "Research Agent Server"
+runButton = "Flask Research Agent"
 
 [[workflows.workflow]]
 name = "Project"
@@ -53,6 +53,15 @@ args = "python api_server.py"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python -m http.server 8080"
+
+[[workflows.workflow]]
+name = "Flask Research Agent"
+author = 43547994
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python api_server.py"
 
 [[ports]]
 localPort = 5000

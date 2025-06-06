@@ -1,5 +1,5 @@
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 import requests
@@ -317,6 +317,14 @@ def research_agent():
         
     except Exception as e:
         return jsonify({'error': f'Research failed: {str(e)}'}), 500
+
+@app.route('/')
+def serve_index():
+    return send_from_directory('.', 'index.html')
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('.', filename)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
