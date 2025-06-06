@@ -1,5 +1,5 @@
 // Simplified HTTP request function for Netlify
-async function fetchWithTimeout(url, options = {}, timeout = 10000) {
+async function fetchWithTimeout(url, options = {}, timeout = 25000) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     
@@ -10,6 +10,8 @@ async function fetchWithTimeout(url, options = {}, timeout = 10000) {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (compatible; AIResearchAgent/1.0)',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Cache-Control': 'no-cache',
                 ...options.headers
             }
         });
@@ -18,6 +20,9 @@ async function fetchWithTimeout(url, options = {}, timeout = 10000) {
         return response;
     } catch (error) {
         clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error(`Request timed out after ${timeout/1000} seconds`);
+        }
         throw error;
     }
 }
@@ -351,14 +356,26 @@ exports.handler = async (event, context) => {
         }
 
         updateProgress('Content Processing', 'Extracting text content...', 35);
+        
+        // Check content length to avoid processing huge pages
+        const contentLength = response.headers.get('content-length');
+        if (contentLength && parseInt(contentLength) > 5000000) { // 5MB limit
+            throw new Error('Website content too large to process');
+        }
+        
         const htmlContent = await response.text();
-        const textContent = extractTextFromHTML(htmlContent);
+        
+        // Limit HTML content size
+        const limitedHtmlContent = htmlContent.length > 1000000 ? 
+            htmlContent.substring(0, 1000000) : htmlContent;
+            
+        const textContent = extractTextFromHTML(limitedHtmlContent);
         
         updateProgress('Content Processing', 'Parsing company information...', 40);
         const scrapedData = {
             base_url: websiteUrl,
-            company_name: extractCompanyName(websiteUrl, htmlContent),
-            content: textContent.substring(0, 5000),
+            company_name: extractCompanyName(websiteUrl, limitedHtmlContent),
+            content: textContent.substring(0, 8000), // Increased for better analysis
             emails: extractEmails(textContent),
             scraped_pages_count: 1
         };
@@ -376,13 +393,19 @@ exports.handler = async (event, context) => {
         if (includeExternal && tavilyApiKey) {
             try {
                 updateProgress('External Research', 'Searching external sources...', 55);
-                externalData = await performExternalResearch(scrapedData.company_name, tavilyApiKey);
+                // Add timeout for external research
+                const researchPromise = performExternalResearch(scrapedData.company_name, tavilyApiKey);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('External research timeout')), 15000)
+                );
+                externalData = await Promise.race([researchPromise, timeoutPromise]);
                 updateProgress('External Research', 'External research completed', 65);
                 console.log('External research completed');
             } catch (externalError) {
                 console.error('External research error:', externalError);
                 updateProgress('External Research', 'External research failed, continuing...', 65);
                 // Continue without external data
+                externalData = { error: 'External research timed out or failed' };
             }
         } else {
             updateProgress('External Research', 'Skipped - no Tavily API key', 65);
