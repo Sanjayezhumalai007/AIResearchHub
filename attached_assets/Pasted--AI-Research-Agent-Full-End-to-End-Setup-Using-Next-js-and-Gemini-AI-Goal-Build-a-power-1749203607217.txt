@@ -1,0 +1,178 @@
+# AI Research Agent: Full End-to-End Setup Using Next.js and Gemini AI
+
+## ✨ Goal
+
+Build a powerful AI Research Agent in Next.js that takes a website URL and returns a structured company profile by combining:
+
+* **On-site web scraping** (e.g., Home, About, Products, Team)
+* **External research** (e.g., Wikipedia, Crunchbase, LinkedIn)
+* **Gemini AI synthesis** of all content into a structured JSON format
+
+---
+
+## ⚖️ Prerequisites
+
+* **Node.js 18+** from [https://nodejs.org/](https://nodejs.org/)
+* **Google Gemini API key** ([AI Studio](https://aistudio.google.com/app/apikey))
+* **Tavily API key** ([https://tavily.com](https://tavily.com))
+* Code editor (e.g., VS Code)
+
+---
+
+## 📄 Step 1: Initialize the Next.js Project
+
+```bash
+npx create-next-app@latest ai-research-agent
+```
+
+**Choose these options:**
+
+* TypeScript: Yes
+* ESLint: Yes
+* Tailwind CSS: Yes
+* src directory: Yes
+* App Router: Yes
+* Customize alias: No
+
+```bash
+cd ai-research-agent
+```
+
+---
+
+## ⚙️ Step 2: Install Dependencies
+
+```bash
+npm install puppeteer cheerio tavily-sdk
+```
+
+---
+
+## 🔑 Step 3: Set Up Environment Variables
+
+Create a `.env.local` file:
+
+```env
+GEMINI_API_KEY="your_google_gemini_api_key"
+TAVILY_API_KEY="your_tavily_api_key"
+```
+
+---
+
+## 🚧 Step 4: API Endpoint Setup
+
+**Create file:** `src/app/api/research/route.ts`
+
+Paste the full logic (scraping + synthesis + LLM call) from the earlier detailed response.
+
+### Key functions:
+
+* `scrapePageSurgically`: Extracts clean content, social links, emails.
+* `performTieredExternalResearch`: Uses Tavily + Puppeteer to enrich data.
+* `POST`: Crawls, aggregates text, sends to Gemini, returns structured profile.
+
+---
+
+## 🔄 Step 5: Run the App
+
+```bash
+npm run dev
+```
+
+Server running at: `http://localhost:3000`
+
+---
+
+## ✉️ Step 6: Test the API
+
+### ⚡ CURL Example:
+
+```bash
+curl -X POST http://localhost:3000/api/research \
+-H "Content-Type: application/json" \
+-d '{"websiteUrl": "https://stripe.com"}'
+```
+
+### 💻 Postman/Insomnia:
+
+* Method: `POST`
+* URL: `http://localhost:3000/api/research`
+* Body (JSON):
+
+```json
+{
+  "websiteUrl": "https://stripe.com"
+}
+```
+
+---
+
+## 🧱 Output Example
+
+```json
+{
+  "company_name": "stripe",
+  "website_url": "https://stripe.com",
+  "linkedin_url": "https://linkedin.com/company/stripe",
+  "confidence_score": "High",
+  "summary": {
+    "about": "Stripe builds financial infrastructure...",
+    "tagline": "Payments infrastructure for the internet"
+  },
+  "company_details": {
+    "industry": "Fintech",
+    "founded_year": 2010,
+    "company_type": "Private",
+    "headquarters": "San Francisco, CA"
+  },
+  "people": {
+    "founders": ["Patrick Collison", "John Collison"],
+    "key_executives": ["CFO: X", "CTO: Y"]
+  },
+  "offerings": {
+    "service_details": ["Payment Gateway", "Billing APIs"],
+    "pricing_model": "Usage-based"
+  },
+  "valuation_and_revenue": {
+    "value": "95B",
+    "metric_type": "valuation",
+    "source": "TechCrunch",
+    "source_url": "https://techcrunch.com/...",
+    "date_of_metric": "2024-06-01",
+    "explanation": "Based on last funding round."
+  },
+  "contact_info": {
+    "phone": null,
+    "email": "info@stripe.com",
+    "contact_page_url": "https://stripe.com/contact"
+  },
+  "reference_links": {
+    "crunchbase_url": "https://crunchbase.com/stripe",
+    "wikipedia_url": "https://en.wikipedia.org/wiki/Stripe_(company)",
+    "other": []
+  },
+  "last_updated": "2025-06-06"
+}
+```
+
+---
+
+## 🔗 Gemini AI Highlights
+
+* Uses `gemini-1.5-flash` via REST API
+* Prompting includes scraped and Tavily data
+* Returns structured JSON profile using schema
+
+You can customize the prompt and schema to match your use case (e.g., for investors, HR, sales intelligence).
+
+---
+
+## ✨ Optional Enhancements
+
+* Add a **frontend dashboard** using ShadCN UI
+* Save output to **Supabase / DynamoDB**
+* Cache results by domain
+* Add streaming mode from Gemini
+* Add support for other LLMs (Claude, GPT-4)
+
+Let me know if you'd like these added!
