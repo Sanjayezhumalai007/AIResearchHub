@@ -314,7 +314,7 @@ exports.handler = async (event, context) => {
         console.log('Step 1: Scraping website content...');
         let response;
         try {
-            response = await makeRequest(websiteUrl);
+            response = await fetchWithTimeout(websiteUrl);
             updateProgress('Website Analysis', 'Content downloaded successfully', 25);
         } catch (scrapeError) {
             console.error('Website scraping error:', scrapeError);
@@ -325,16 +325,16 @@ exports.handler = async (event, context) => {
             };
         }
 
-        if (response.statusCode >= 400) {
+        if (!response.ok) {
             return {
                 statusCode: 500,
                 headers,
-                body: JSON.stringify({ error: `Website returned error: ${response.statusCode}` })
+                body: JSON.stringify({ error: `Website returned error: ${response.status}` })
             };
         }
 
         updateProgress('Content Processing', 'Extracting text content...', 35);
-        const htmlContent = response.body;
+        const htmlContent = await response.text();
         const textContent = extractTextFromHTML(htmlContent);
         
         updateProgress('Content Processing', 'Parsing company information...', 40);
