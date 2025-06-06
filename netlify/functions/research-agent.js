@@ -1,26 +1,24 @@
-// Helper function to make HTTP requests using fetch
-async function makeRequest(url, options = {}) {
+// Simplified HTTP request function for Netlify
+async function fetchWithTimeout(url, options = {}, timeout = 10000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
     try {
         const response = await fetch(url, {
-            method: options.method || 'GET',
+            ...options,
+            signal: controller.signal,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (compatible; AIResearchAgent/1.0)',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 ...options.headers
-            },
-            body: options.body || undefined,
-            timeout: 15000
+            }
         });
-
-        const body = await response.text();
         
-        return {
-            statusCode: response.status,
-            headers: Object.fromEntries(response.headers.entries()),
-            body: body
-        };
+        clearTimeout(timeoutId);
+        return response;
     } catch (error) {
-        throw new Error(`Request failed: ${error.message}`);
+        clearTimeout(timeoutId);
+        throw error;
     }
 }
 
@@ -90,7 +88,7 @@ async function performExternalResearch(companyName, tavilyApiKey) {
 
         for (let i = 0; i < queries.length; i++) {
             try {
-                const response = await makeRequest('https://api.tavily.com/search', {
+                const response = await fetchWithTimeout('https://api.tavily.com/search', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -105,8 +103,8 @@ async function performExternalResearch(companyName, tavilyApiKey) {
                     })
                 });
 
-                if (response.statusCode === 200) {
-                    const data = JSON.parse(response.body);
+                if (response.ok) {
+                    const data = await response.json();
                     const resultKey = Object.keys(results)[i];
                     results[resultKey] = data.results || [];
                 }
@@ -193,7 +191,7 @@ INSTRUCTIONS:
 JSON Response:`;
 
     try {
-        const response = await makeRequest(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiApiKey}`, {
+        const response = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiApiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -213,11 +211,11 @@ JSON Response:`;
             })
         });
 
-        if (response.statusCode !== 200) {
-            throw new Error(`Gemini API error: ${response.statusCode}`);
+        if (!response.ok) {
+            throw new Error(`Gemini API error: ${response.status}`);
         }
 
-        const data = JSON.parse(response.body);
+        const data = await response.json();
         let responseText = data.candidates[0].content.parts[0].text;
 
         // Clean up response if it contains markdown code blocks
