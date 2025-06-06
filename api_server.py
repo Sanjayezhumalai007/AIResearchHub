@@ -243,31 +243,49 @@ def research_agent():
         return jsonify({}), 200
     
     try:
+        print("Received research request")
+        
         data = request.get_json()
         if not data:
+            print("No JSON data received")
             return jsonify({'error': 'Invalid JSON in request body'}), 400
+        
+        print(f"Request data: {data}")
         
         website_url = data.get('websiteUrl')
         max_pages = data.get('maxPages', 5)
         include_external = data.get('includeExternal', True)
         
         if not website_url:
+            print("No website URL provided")
             return jsonify({'error': 'Website URL is required'}), 400
+        
+        print(f"Processing URL: {website_url}")
         
         # Get API keys from environment
         gemini_api_key = os.getenv('GEMINI_API_KEY')
         tavily_api_key = os.getenv('TAVILY_API_KEY')
         
+        print(f"API Keys - Gemini: {'✓' if gemini_api_key else '✗'}, Tavily: {'✓' if tavily_api_key else '✗'}")
+        
         if not gemini_api_key:
-            return jsonify({'error': 'Gemini API key not configured. Please add GEMINI_API_KEY to your environment variables.'}), 400
+            error_msg = 'Gemini API key not configured. Please add GEMINI_API_KEY to your Secrets in the Tools panel.'
+            print(f"Error: {error_msg}")
+            return jsonify({'error': error_msg}), 400
         
         # Step 1: Scrape website content
+        print("Step 1: Fetching website content...")
         try:
             response = fetch_with_timeout(website_url)
             if not response.ok:
-                return jsonify({'error': f'Website returned error: {response.status_code}'}), 500
+                error_msg = f'Website returned error: {response.status_code}'
+                print(f"Website fetch error: {error_msg}")
+                return jsonify({'error': error_msg}), 500
+            print("Website content fetched successfully")
         except Exception as e:
-            return jsonify({'error': f'Failed to fetch website: {str(e)}'}), 500
+            error_msg = f'Failed to fetch website: {str(e)}'
+            print(f"Website fetch exception: {error_msg}")
+            return jsonify({'error': error_msg}), 500
         
         # Check content length
         content_length = response.headers.get('content-length')
@@ -301,22 +319,43 @@ def research_agent():
             external_data = {'error': 'External research skipped - no Tavily API key'}
         
         # Step 3: AI synthesis
+        print("Step 3: AI synthesis...")
         try:
             company_profile = synthesize_with_ai(scraped_data, external_data, gemini_api_key)
+            print("AI synthesis completed successfully")
         except Exception as e:
-            return jsonify({'error': f'AI analysis failed: {str(e)}'}), 500
+            error_msg = f'AI analysis failed: {str(e)}'
+            print(f"AI synthesis error: {error_msg}")
+            return jsonify({'error': error_msg}), 500
         
         # Step 4: Finalize profile
+        print("Step 4: Finalizing profile...")
         company_profile['website_url'] = website_url
         company_profile['last_updated'] = '2024-01-20'  # Current date
         
         if 'confidence_score' not in company_profile:
             company_profile['confidence_score'] = 'Medium'
         
+        print("Research completed successfully")
         return jsonify(company_profile)
         
     except Exception as e:
-        return jsonify({'error': f'Research failed: {str(e)}'}), 500
+        error_msg = f'Research failed: {str(e)}'
+        print(f"Unexpected error: {error_msg}")
+        return jsonify({'error': error_msg}), 500
+
+@app.route('/api/test')
+def test_api():
+    """Test endpoint to check API status"""
+    gemini_key = os.getenv('GEMINI_API_KEY')
+    tavily_key = os.getenv('TAVILY_API_KEY')
+    
+    return jsonify({
+        'status': 'API is running',
+        'gemini_configured': bool(gemini_key),
+        'tavily_configured': bool(tavily_key),
+        'timestamp': '2024-01-20'
+    })
 
 @app.route('/')
 def serve_index():

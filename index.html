@@ -1,3 +1,7 @@
+Adding API key configuration instructions to the component.
+```
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,26 +21,26 @@
                 transform: scale(1.05);
             }
         }
-        
+
         @keyframes progress-shimmer {
             0% { background-position: -200px 0; }
             100% { background-position: calc(200px + 100%) 0; }
         }
-        
+
         .pulse-glow {
             animation: pulse-glow 2s ease-in-out infinite;
         }
-        
+
         .progress-shimmer {
             background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
             background-size: 200px 100%;
             animation: progress-shimmer 1.5s infinite;
         }
-        
+
         .stage-active {
             position: relative;
         }
-        
+
         .stage-active::before {
             content: '';
             position: absolute;
@@ -47,34 +51,34 @@
             z-index: -1;
             animation: gradient-border 3s ease infinite;
         }
-        
+
         @keyframes gradient-border {
             0%, 100% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
         }
-        
+
         .success-bounce {
             animation: success-bounce 0.6s ease-out;
         }
-        
+
         @keyframes success-bounce {
             0% { transform: scale(1); }
             50% { transform: scale(1.2); }
             100% { transform: scale(1); }
         }
-        
+
         .typewriter {
             overflow: hidden;
             border-right: 2px solid #3b82f6;
             white-space: nowrap;
             animation: typewriter 1s steps(40) forwards, blink-caret 1s step-end infinite;
         }
-        
+
         @keyframes typewriter {
             from { width: 0; }
             to { width: 100%; }
         }
-        
+
         @keyframes blink-caret {
             from, to { border-color: transparent; }
             50% { border-color: #3b82f6; }
@@ -97,6 +101,16 @@
         <!-- Main Form -->
         <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-8 mb-8">
             <form id="researchForm" class="space-y-6">
+                <div class="mb-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">AI Research Agent</h2>
+                <p class="text-gray-600">Enter a company website URL to generate a comprehensive research report using AI analysis.</p>
+                <div class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p class="text-sm text-blue-700">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        <strong>Setup Required:</strong> Add your GEMINI_API_KEY to the Secrets panel in the Tools section (left sidebar) before using this tool.
+                    </p>
+                </div>
+            </div>
                 <div>
                     <label for="websiteUrl" class="block text-sm font-medium text-gray-700 mb-2">
                         Company Website URL
@@ -402,7 +416,7 @@
                             <div id="linksContent" class="flex flex-wrap gap-2"></div>
                         </div>
                     </div>
-                    
+
                     <!-- Download & Actions -->
                     <div class="mt-6 pt-6 border-t border-gray-200 flex flex-wrap gap-4">
                         <button id="downloadBtn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition duration-200">
@@ -431,3 +445,4 @@
     <script src="script.js"></script>
 </body>
 </html>
+</replit_final_file>

@@ -85,12 +85,14 @@ class AIResearchAgent {
             console.error('Research error:', error);
             
             // Check if this is an API key configuration issue
-            if (error.message.includes('API key not configured')) {
-                this.showError('API keys not configured. Please add GEMINI_API_KEY and TAVILY_API_KEY to your environment variables in the Secrets panel.');
+            if (error.message.includes('API key not configured') || error.message.includes('Gemini API key')) {
+                this.showError('API key not configured. Please add GEMINI_API_KEY to your Secrets in the Tools panel on the left side of the screen.');
             } else if (error.message.includes('API server not accessible')) {
                 this.showError('API server not accessible. Please ensure the Flask API server is running properly.');
+            } else if (error.message.includes('Failed to fetch website')) {
+                this.showError('Unable to access the website. Please check the URL and try again.');
             } else {
-                this.showError(error.message || 'An unexpected error occurred during research');
+                this.showError(error.message || 'An unexpected error occurred during research. Please check the console for details.');
             }
         } finally {
             this.hideProgress();
