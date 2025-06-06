@@ -218,16 +218,33 @@ JSON Response:`;
         const data = await response.json();
         let responseText = data.candidates[0].content.parts[0].text;
 
-        // Clean up response if it contains markdown code blocks
-        if (responseText.startsWith('```json')) {
-            responseText = responseText.slice(7);
-        }
-        if (responseText.endsWith('```')) {
-            responseText = responseText.slice(0, -3);
+        // More robust cleanup of markdown code blocks and formatting
+        responseText = responseText.trim();
+        
+        // Remove markdown code block markers
+        responseText = responseText.replace(/^```json\s*/i, '');
+        responseText = responseText.replace(/^```\s*/i, '');
+        responseText = responseText.replace(/\s*```$/i, '');
+        
+        // Remove any backticks that might be in the middle of the text
+        responseText = responseText.replace(/`/g, '');
+        
+        // Find the JSON object by looking for the first { and last }
+        const firstBrace = responseText.indexOf('{');
+        const lastBrace = responseText.lastIndexOf('}');
+        
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            responseText = responseText.substring(firstBrace, lastBrace + 1);
         }
 
-        const companyProfile = JSON.parse(responseText);
-        return companyProfile;
+        try {
+            const companyProfile = JSON.parse(responseText);
+            return companyProfile;
+        } catch (parseError) {
+            console.error('JSON parse error:', parseError);
+            console.error('Response text:', responseText);
+            throw new Error(`Failed to parse AI response as JSON: ${parseError.message}`);
+        }
 
     } catch (error) {
         throw new Error(`AI synthesis failed: ${error.message}`);
