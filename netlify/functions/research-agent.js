@@ -279,6 +279,11 @@ exports.handler = async (event, context) => {
 
         const { websiteUrl, maxPages = 5, includeExternal = true } = requestData;
 
+        // Progress tracking function
+        const updateProgress = (stage, message, percentage) => {
+            console.log(`[${stage}] ${message} (${percentage}%)`);
+        };
+
         if (!websiteUrl) {
             return {
                 statusCode: 400,
@@ -307,10 +312,12 @@ exports.handler = async (event, context) => {
         }
 
         // Step 1: Scrape website content
+        updateProgress('Website Analysis', 'Connecting to website...', 15);
         console.log('Step 1: Scraping website content...');
         let response;
         try {
             response = await makeRequest(websiteUrl);
+            updateProgress('Website Analysis', 'Content downloaded successfully', 25);
         } catch (scrapeError) {
             console.error('Website scraping error:', scrapeError);
             return {
@@ -328,9 +335,11 @@ exports.handler = async (event, context) => {
             };
         }
 
+        updateProgress('Content Processing', 'Extracting text content...', 35);
         const htmlContent = response.body;
         const textContent = extractTextFromHTML(htmlContent);
         
+        updateProgress('Content Processing', 'Parsing company information...', 40);
         const scrapedData = {
             base_url: websiteUrl,
             company_name: extractCompanyName(websiteUrl, htmlContent),
@@ -346,25 +355,33 @@ exports.handler = async (event, context) => {
         });
 
         // Step 2: External research (if enabled)
+        updateProgress('External Research', 'Initiating external data gathering...', 50);
         console.log('Step 2: External research...');
         let externalData = {};
         if (includeExternal && tavilyApiKey) {
             try {
+                updateProgress('External Research', 'Searching external sources...', 55);
                 externalData = await performExternalResearch(scrapedData.company_name, tavilyApiKey);
+                updateProgress('External Research', 'External research completed', 65);
                 console.log('External research completed');
             } catch (externalError) {
                 console.error('External research error:', externalError);
+                updateProgress('External Research', 'External research failed, continuing...', 65);
                 // Continue without external data
             }
         } else {
+            updateProgress('External Research', 'Skipped - no Tavily API key', 65);
             console.log('External research skipped - no Tavily API key');
         }
 
         // Step 3: Synthesize with AI
+        updateProgress('AI Analysis', 'Preparing data for AI synthesis...', 70);
         console.log('Step 3: AI synthesis...');
         let companyProfile;
         try {
+            updateProgress('AI Analysis', 'Sending to Gemini AI...', 75);
             companyProfile = await synthesizeWithAI(scrapedData, externalData, geminiApiKey);
+            updateProgress('AI Analysis', 'AI analysis completed', 85);
             console.log('AI synthesis completed');
         } catch (aiError) {
             console.error('AI synthesis error:', aiError);
@@ -376,6 +393,7 @@ exports.handler = async (event, context) => {
         }
 
         // Step 4: Finalize profile
+        updateProgress('Report Generation', 'Finalizing company profile...', 90);
         companyProfile.website_url = websiteUrl;
         companyProfile.last_updated = new Date().toISOString().split('T')[0];
 
@@ -383,6 +401,7 @@ exports.handler = async (event, context) => {
             companyProfile.confidence_score = 'Medium';
         }
 
+        updateProgress('Report Generation', 'Research completed successfully', 100);
         console.log('Research completed successfully');
 
         return {

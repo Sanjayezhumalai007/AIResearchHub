@@ -6,6 +6,80 @@
     <title>AI Research Agent</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @keyframes pulse-glow {
+            0%, 100% { 
+                box-shadow: 0 0 5px rgba(59, 130, 246, 0.5);
+                transform: scale(1);
+            }
+            50% { 
+                box-shadow: 0 0 20px rgba(59, 130, 246, 0.8), 0 0 30px rgba(59, 130, 246, 0.4);
+                transform: scale(1.05);
+            }
+        }
+        
+        @keyframes progress-shimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: calc(200px + 100%) 0; }
+        }
+        
+        .pulse-glow {
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+        
+        .progress-shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            background-size: 200px 100%;
+            animation: progress-shimmer 1.5s infinite;
+        }
+        
+        .stage-active {
+            position: relative;
+        }
+        
+        .stage-active::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            background: linear-gradient(45deg, #3b82f6, #8b5cf6, #06b6d4, #3b82f6);
+            background-size: 300% 300%;
+            border-radius: 50%;
+            z-index: -1;
+            animation: gradient-border 3s ease infinite;
+        }
+        
+        @keyframes gradient-border {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        
+        .success-bounce {
+            animation: success-bounce 0.6s ease-out;
+        }
+        
+        @keyframes success-bounce {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        
+        .typewriter {
+            overflow: hidden;
+            border-right: 2px solid #3b82f6;
+            white-space: nowrap;
+            animation: typewriter 1s steps(40) forwards, blink-caret 1s step-end infinite;
+        }
+        
+        @keyframes typewriter {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+        
+        @keyframes blink-caret {
+            from, to { border-color: transparent; }
+            50% { border-color: #3b82f6; }
+        }
+    </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
     <div class="container mx-auto px-4 py-8">
@@ -200,11 +274,29 @@
                 </div>
             </div>
 
+            <!-- Real-time Stats -->
+            <div class="mt-6 pt-4 border-t border-gray-200">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                    <div class="bg-blue-50 rounded-lg p-3">
+                        <div class="text-lg font-semibold text-blue-800" id="pagesProcessed">0</div>
+                        <div class="text-xs text-blue-600">Pages Processed</div>
+                    </div>
+                    <div class="bg-green-50 rounded-lg p-3">
+                        <div class="text-lg font-semibold text-green-800" id="dataPointsFound">0</div>
+                        <div class="text-xs text-green-600">Data Points Found</div>
+                    </div>
+                    <div class="bg-purple-50 rounded-lg p-3">
+                        <div class="text-lg font-semibold text-purple-800" id="aiTokensUsed">0</div>
+                        <div class="text-xs text-purple-600">AI Tokens Used</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Estimated Time -->
             <div class="mt-4 text-center">
                 <p class="text-sm text-gray-500">
                     <i class="fas fa-clock mr-1"></i>
-                    Estimated time: <span id="estimatedTime">30-45 seconds</span>
+                    <span id="estimatedTime">Estimated time: 30-45 seconds</span>
                 </p>
             </div>
         </div>

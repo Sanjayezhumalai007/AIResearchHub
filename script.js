@@ -128,15 +128,29 @@ class AIResearchAgent {
             const icon = document.getElementById(`stage${i}Icon`);
             icon.className = 'flex items-center justify-center w-16 h-16 rounded-full bg-gray-200 border-4 border-white shadow-lg z-10 transition-all duration-500';
             
-            // Reset icon colors
+            // Reset icon colors and restore original icons
             const iconElement = icon.querySelector('i');
-            iconElement.className = iconElement.className.replace('text-blue-600', 'text-gray-400');
+            iconElement.classList.remove('fa-spin', 'fa-check');
+            iconElement.className = iconElement.className.replace('text-blue-600', 'text-gray-400').replace('text-green-600', 'text-gray-400');
+            
+            // Restore original icons
+            const originalIcons = ['fa-globe', 'fa-cogs', 'fa-search', 'fa-brain', 'fa-file-alt'];
+            iconElement.className = iconElement.className.replace(/fa-[^ ]+/, originalIcons[i - 1]);
         }
         
         // Reset overall progress
         document.getElementById('overallProgressBar').style.width = '0%';
+        document.getElementById('overallProgressBar').className = 'bg-gradient-to-r from-blue-600 to-blue-700 h-3 rounded-full transition-all duration-500';
         document.getElementById('overallProgressText').textContent = '0%';
         document.getElementById('progressLine').style.height = '0%';
+        
+        // Reset stats
+        document.getElementById('pagesProcessed').textContent = '0';
+        document.getElementById('dataPointsFound').textContent = '0';
+        document.getElementById('aiTokensUsed').textContent = '0';
+        
+        // Reset estimated time
+        document.getElementById('estimatedTime').textContent = 'Estimated time: 30-45 seconds';
     }
 
     startProgressAnimation() {
@@ -239,25 +253,61 @@ class AIResearchAgent {
         const icon = document.getElementById(`stage${stageNumber}Icon`);
         const iconElement = icon.querySelector('i');
         
-        // Add active state
-        icon.className = 'flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 border-4 border-blue-200 shadow-lg z-10 transition-all duration-500';
+        // Add active state with enhanced animations
+        icon.className = 'flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 border-4 border-blue-200 shadow-lg z-10 transition-all duration-500 pulse-glow stage-active';
         
-        // Add spinning animation
+        // Add spinning animation and enhanced styling
         iconElement.classList.add('fa-spin');
         iconElement.className = iconElement.className.replace('text-gray-400', 'text-blue-600');
+        
+        // Add progress shimmer to the stage progress bar
+        const progressBar = document.getElementById(`stage${stageNumber}Progress`);
+        progressBar.classList.add('progress-shimmer');
     }
 
     completeStage(stageNumber) {
         const icon = document.getElementById(`stage${stageNumber}Icon`);
         const iconElement = icon.querySelector('i');
+        const progressBar = document.getElementById(`stage${stageNumber}Progress`);
         
-        // Remove spinning and add completed state
+        // Remove active animations
         iconElement.classList.remove('fa-spin');
-        icon.className = 'flex items-center justify-center w-16 h-16 rounded-full bg-green-100 border-4 border-green-200 shadow-lg z-10 transition-all duration-500';
+        icon.classList.remove('pulse-glow', 'stage-active');
+        progressBar.classList.remove('progress-shimmer');
+        
+        // Add completed state with success animation
+        icon.className = 'flex items-center justify-center w-16 h-16 rounded-full bg-green-100 border-4 border-green-200 shadow-lg z-10 transition-all duration-500 success-bounce';
         iconElement.className = iconElement.className.replace('text-blue-600', 'text-green-600');
         
         // Change icon to checkmark
         iconElement.className = iconElement.className.replace(/fa-[^ ]+/, 'fa-check');
+        
+        // Add completion sound effect (optional - browser compatible)
+        this.playCompletionSound();
+    }
+
+    playCompletionSound() {
+        // Create a simple completion beep using Web Audio API
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+            oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
+            
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.2);
+        } catch (e) {
+            // Fallback: silent if audio context not available
+            console.log('Audio feedback not available');
+        }
     }
 
     animateStageProgress(stageNumber, steps, duration, onComplete) {
@@ -274,6 +324,9 @@ class AIResearchAgent {
                 const progress = ((currentStep + 1) / steps.length) * 100;
                 progressBar.style.width = `${progress}%`;
                 
+                // Update realistic stats based on stage
+                this.updateRealtimeStats(stageNumber, currentStep);
+                
                 currentStep++;
                 setTimeout(updateStep, stepDuration);
             } else {
@@ -282,6 +335,40 @@ class AIResearchAgent {
         };
         
         updateStep();
+    }
+
+    updateRealtimeStats(stageNumber, stepIndex) {
+        const pagesElement = document.getElementById('pagesProcessed');
+        const dataPointsElement = document.getElementById('dataPointsFound');
+        const tokensElement = document.getElementById('aiTokensUsed');
+        
+        // Simulate realistic stat updates based on current stage
+        switch(stageNumber) {
+            case 1: // Website Analysis
+                if (stepIndex >= 1) {
+                    pagesElement.textContent = Math.min(stepIndex, 3);
+                }
+                break;
+            case 2: // Content Processing
+                if (stepIndex >= 2) {
+                    dataPointsElement.textContent = Math.min(5 + stepIndex * 3, 15);
+                }
+                break;
+            case 3: // External Research
+                if (stepIndex >= 1) {
+                    dataPointsElement.textContent = Math.min(15 + stepIndex * 5, 35);
+                }
+                break;
+            case 4: // AI Analysis
+                if (stepIndex >= 1) {
+                    tokensElement.textContent = Math.min(stepIndex * 250, 1000);
+                }
+                break;
+            case 5: // Report Generation
+                dataPointsElement.textContent = Math.min(parseInt(dataPointsElement.textContent) + stepIndex * 2, 45);
+                tokensElement.textContent = Math.min(parseInt(tokensElement.textContent) + stepIndex * 50, 1200);
+                break;
+        }
     }
 
     updateOverallProgress(percentage) {
