@@ -49,10 +49,10 @@ class AIResearchAgent {
         this.showProgress();
         
         try {
-            // Try calling Netlify function first
+            // Try calling Flask API
             let response;
             try {
-                response = await fetch('/.netlify/functions/research-agent', {
+                response = await fetch('/api/research-agent', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -60,8 +60,8 @@ class AIResearchAgent {
                     body: JSON.stringify(requestData)
                 });
             } catch (fetchError) {
-                // If function is not available, show helpful error
-                throw new Error('Netlify function not accessible. Please ensure you have deployed the site with the research-agent function and configured the GEMINI_API_KEY and TAVILY_API_KEY environment variables in your Netlify dashboard.');
+                // If API is not available, show helpful error
+                throw new Error('API server not accessible. Please ensure the Flask API server is running and the GEMINI_API_KEY environment variable is configured.');
             }
 
             let results;
@@ -86,9 +86,9 @@ class AIResearchAgent {
             
             // Check if this is an API key configuration issue
             if (error.message.includes('API key not configured')) {
-                this.showError('API keys not configured. Please add GEMINI_API_KEY and TAVILY_API_KEY to your Netlify environment variables, then redeploy your site.');
-            } else if (error.message.includes('Netlify function not accessible')) {
-                this.showError('Netlify function not accessible. Please ensure you have deployed the site with the serverless function properly configured.');
+                this.showError('API keys not configured. Please add GEMINI_API_KEY and TAVILY_API_KEY to your environment variables in the Secrets panel.');
+            } else if (error.message.includes('API server not accessible')) {
+                this.showError('API server not accessible. Please ensure the Flask API server is running properly.');
             } else {
                 this.showError(error.message || 'An unexpected error occurred during research');
             }
