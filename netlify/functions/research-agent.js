@@ -1,49 +1,27 @@
-const https = require('https');
-const http = require('http');
-const { URL } = require('url');
-
-// Helper function to make HTTP requests
-function makeRequest(url, options = {}) {
-    return new Promise((resolve, reject) => {
-        const urlObj = new URL(url);
-        const lib = urlObj.protocol === 'https:' ? https : http;
-        
-        const requestOptions = {
-            hostname: urlObj.hostname,
-            port: urlObj.port,
-            path: urlObj.pathname + urlObj.search,
+// Helper function to make HTTP requests using fetch
+async function makeRequest(url, options = {}) {
+    try {
+        const response = await fetch(url, {
             method: options.method || 'GET',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'User-Agent': 'Mozilla/5.0 (compatible; AIResearchAgent/1.0)',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 ...options.headers
-            }
+            },
+            body: options.body || undefined,
+            timeout: 15000
+        });
+
+        const body = await response.text();
+        
+        return {
+            statusCode: response.status,
+            headers: Object.fromEntries(response.headers.entries()),
+            body: body
         };
-
-        const req = lib.request(requestOptions, (res) => {
-            let data = '';
-            res.on('data', (chunk) => {
-                data += chunk;
-            });
-            res.on('end', () => {
-                resolve({
-                    statusCode: res.statusCode,
-                    headers: res.headers,
-                    body: data
-                });
-            });
-        });
-
-        req.on('error', (err) => {
-            reject(err);
-        });
-
-        if (options.body) {
-            req.write(options.body);
-        }
-
-        req.end();
-    });
+    } catch (error) {
+        throw new Error(`Request failed: ${error.message}`);
+    }
 }
 
 // Extract text content from HTML
@@ -285,7 +263,21 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        const { websiteUrl, maxPages = 5, includeExternal = true } = JSON.parse(event.body);
+        console.log('Function started, parsing request body...');
+        
+        let requestData;
+        try {
+            requestData = JSON.parse(event.body);
+        } catch (parseError) {
+            console.error('JSON parse error:', parseError);
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'Invalid JSON in request body' })
+            };
+        }
+
+        const { websiteUrl, maxPages = 5, includeExternal = true } = requestData;
 
         if (!websiteUrl) {
             return {
@@ -295,22 +287,45 @@ exports.handler = async (event, context) => {
             };
         }
 
+        console.log('Processing request for:', websiteUrl);
+
         // Get environment variables
         const geminiApiKey = process.env.GEMINI_API_KEY;
         const tavilyApiKey = process.env.TAVILY_API_KEY;
+
+        console.log('API keys available:', {
+            gemini: !!geminiApiKey,
+            tavily: !!tavilyApiKey
+        });
 
         if (!geminiApiKey) {
             return {
                 statusCode: 400,
                 headers,
-                body: JSON.stringify({ error: 'Gemini API key not configured' })
+                body: JSON.stringify({ error: 'Gemini API key not configured. Please add GEMINI_API_KEY to your Netlify environment variables.' })
             };
         }
 
         // Step 1: Scrape website content
-        const response = await makeRequest(websiteUrl);
+        console.log('Step 1: Scraping website content...');
+        let response;
+        try {
+            response = await makeRequest(websiteUrl);
+        } catch (scrapeError) {
+            console.error('Website scraping error:', scrapeError);
+            return {
+                statusCode: 500,
+                headers,
+                body: JSON.stringify({ error: `Failed to fetch website: ${scrapeError.message}` })
+            };
+        }
+
         if (response.statusCode >= 400) {
-            throw new Error(`Failed to fetch website: ${response.statusCode}`);
+            return {
+                statusCode: 500,
+                headers,
+                body: JSON.stringify({ error: `Website returned error: ${response.statusCode}` })
+            };
         }
 
         const htmlContent = response.body;
@@ -319,19 +334,46 @@ exports.handler = async (event, context) => {
         const scrapedData = {
             base_url: websiteUrl,
             company_name: extractCompanyName(websiteUrl, htmlContent),
-            content: textContent.substring(0, 5000), // Limit content length
+            content: textContent.substring(0, 5000),
             emails: extractEmails(textContent),
             scraped_pages_count: 1
         };
 
+        console.log('Scraped data extracted:', {
+            company_name: scrapedData.company_name,
+            content_length: scrapedData.content.length,
+            emails_found: scrapedData.emails.length
+        });
+
         // Step 2: External research (if enabled)
+        console.log('Step 2: External research...');
         let externalData = {};
         if (includeExternal && tavilyApiKey) {
-            externalData = await performExternalResearch(scrapedData.company_name, tavilyApiKey);
+            try {
+                externalData = await performExternalResearch(scrapedData.company_name, tavilyApiKey);
+                console.log('External research completed');
+            } catch (externalError) {
+                console.error('External research error:', externalError);
+                // Continue without external data
+            }
+        } else {
+            console.log('External research skipped - no Tavily API key');
         }
 
         // Step 3: Synthesize with AI
-        const companyProfile = await synthesizeWithAI(scrapedData, externalData, geminiApiKey);
+        console.log('Step 3: AI synthesis...');
+        let companyProfile;
+        try {
+            companyProfile = await synthesizeWithAI(scrapedData, externalData, geminiApiKey);
+            console.log('AI synthesis completed');
+        } catch (aiError) {
+            console.error('AI synthesis error:', aiError);
+            return {
+                statusCode: 500,
+                headers,
+                body: JSON.stringify({ error: `AI analysis failed: ${aiError.message}` })
+            };
+        }
 
         // Step 4: Finalize profile
         companyProfile.website_url = websiteUrl;
@@ -341,6 +383,8 @@ exports.handler = async (event, context) => {
             companyProfile.confidence_score = 'Medium';
         }
 
+        console.log('Research completed successfully');
+
         return {
             statusCode: 200,
             headers,
@@ -348,12 +392,12 @@ exports.handler = async (event, context) => {
         };
 
     } catch (error) {
-        console.error('Research error:', error);
+        console.error('Unexpected error:', error);
         return {
             statusCode: 500,
             headers,
             body: JSON.stringify({ 
-                error: error.message || 'An unexpected error occurred during research'
+                error: `Research failed: ${error.message}`
             })
         };
     }

@@ -49,27 +49,49 @@ class AIResearchAgent {
         this.showProgress();
         
         try {
-            // Call Netlify function
-            const response = await fetch('/.netlify/functions/research-agent', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestData)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Research failed');
+            // Try calling Netlify function first
+            let response;
+            try {
+                response = await fetch('/.netlify/functions/research-agent', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+            } catch (fetchError) {
+                // If function is not available, show helpful error
+                throw new Error('Netlify function not accessible. Please ensure you have deployed the site with the research-agent function and configured the GEMINI_API_KEY and TAVILY_API_KEY environment variables in your Netlify dashboard.');
             }
 
-            const results = await response.json();
+            let results;
+            if (response.ok) {
+                results = await response.json();
+            } else {
+                const errorText = await response.text();
+                let errorData;
+                try {
+                    errorData = JSON.parse(errorText);
+                } catch (parseError) {
+                    throw new Error(`Server error (${response.status}): ${errorText}`);
+                }
+                throw new Error(errorData.error || `Server error: ${response.status}`);
+            }
+
             this.currentResults = results;
             this.displayResults(results);
             
         } catch (error) {
             console.error('Research error:', error);
-            this.showError(error.message || 'An unexpected error occurred during research');
+            
+            // Check if this is an API key configuration issue
+            if (error.message.includes('API key not configured')) {
+                this.showError('API keys not configured. Please add GEMINI_API_KEY and TAVILY_API_KEY to your Netlify environment variables, then redeploy your site.');
+            } else if (error.message.includes('Netlify function not accessible')) {
+                this.showError('Netlify function not accessible. Please ensure you have deployed the site with the serverless function properly configured.');
+            } else {
+                this.showError(error.message || 'An unexpected error occurred during research');
+            }
         } finally {
             this.hideProgress();
         }
@@ -89,34 +111,218 @@ class AIResearchAgent {
         document.getElementById('resultsSection').classList.add('hidden');
         document.getElementById('errorSection').classList.add('hidden');
         
-        // Simulate progress updates
-        let progress = 0;
-        const messages = [
-            'Initializing web scraper...',
-            'Scraping website content...',
-            'Conducting external research...',
-            'Synthesizing data with AI...',
-            'Finalizing report...'
-        ];
+        // Reset all progress indicators
+        this.resetProgressIndicators();
         
-        const interval = setInterval(() => {
-            progress += 20;
-            document.getElementById('progressBar').style.width = `${progress}%`;
+        // Start the visual progress simulation
+        this.startProgressAnimation();
+    }
+
+    resetProgressIndicators() {
+        // Reset all stage progress bars
+        for (let i = 1; i <= 5; i++) {
+            document.getElementById(`stage${i}Progress`).style.width = '0%';
+            document.getElementById(`stage${i}Details`).classList.add('hidden');
             
-            if (progress <= 80) {
-                const messageIndex = Math.floor((progress - 20) / 20);
-                document.getElementById('progressText').textContent = messages[messageIndex];
-            }
+            // Reset stage icons
+            const icon = document.getElementById(`stage${i}Icon`);
+            icon.className = 'flex items-center justify-center w-16 h-16 rounded-full bg-gray-200 border-4 border-white shadow-lg z-10 transition-all duration-500';
             
-            if (progress >= 100) {
-                clearInterval(interval);
-                document.getElementById('progressText').textContent = 'Research completed!';
+            // Reset icon colors
+            const iconElement = icon.querySelector('i');
+            iconElement.className = iconElement.className.replace('text-blue-600', 'text-gray-400');
+        }
+        
+        // Reset overall progress
+        document.getElementById('overallProgressBar').style.width = '0%';
+        document.getElementById('overallProgressText').textContent = '0%';
+        document.getElementById('progressLine').style.height = '0%';
+    }
+
+    startProgressAnimation() {
+        let currentStage = 0;
+        let overallProgress = 0;
+        
+        const stages = [
+            {
+                name: 'Website Analysis',
+                duration: 3000,
+                steps: [
+                    'Connecting to website...',
+                    'Downloading HTML content...',
+                    'Extracting main content...',
+                    'Identifying company information...'
+                ]
+            },
+            {
+                name: 'Content Processing',
+                duration: 2000,
+                steps: [
+                    'Cleaning extracted text...',
+                    'Parsing company details...',
+                    'Extracting contact information...',
+                    'Structuring data...'
+                ]
+            },
+            {
+                name: 'External Research',
+                duration: 4000,
+                steps: [
+                    'Searching funding information...',
+                    'Looking up leadership data...',
+                    'Gathering business intelligence...',
+                    'Collecting reference links...'
+                ]
+            },
+            {
+                name: 'AI Analysis',
+                duration: 3000,
+                steps: [
+                    'Preparing data for AI analysis...',
+                    'Sending to Gemini AI...',
+                    'Processing AI response...',
+                    'Structuring final output...'
+                ]
+            },
+            {
+                name: 'Report Generation',
+                duration: 1500,
+                steps: [
+                    'Finalizing company profile...',
+                    'Validating data quality...',
+                    'Generating final report...',
+                    'Preparing display...'
+                ]
             }
-        }, 1000);
+        ];
+
+        const animateStage = (stageIndex) => {
+            if (stageIndex >= stages.length) return;
+            
+            const stage = stages[stageIndex];
+            const stageNumber = stageIndex + 1;
+            
+            // Update main progress text
+            document.getElementById('progressText').textContent = `${stage.name} in progress...`;
+            
+            // Activate stage icon
+            this.activateStageIcon(stageNumber);
+            
+            // Show stage details
+            document.getElementById(`stage${stageNumber}Details`).classList.remove('hidden');
+            
+            // Animate stage progress
+            this.animateStageProgress(stageNumber, stage.steps, stage.duration, () => {
+                // Complete this stage
+                this.completeStage(stageNumber);
+                
+                // Update overall progress
+                overallProgress = Math.round(((stageIndex + 1) / stages.length) * 100);
+                this.updateOverallProgress(overallProgress);
+                
+                // Update progress line
+                const lineProgress = ((stageIndex + 1) / stages.length) * 100;
+                document.getElementById('progressLine').style.height = `${lineProgress}%`;
+                
+                // Move to next stage
+                setTimeout(() => {
+                    animateStage(stageIndex + 1);
+                }, 500);
+            });
+        };
+
+        // Start with first stage
+        animateStage(0);
+    }
+
+    activateStageIcon(stageNumber) {
+        const icon = document.getElementById(`stage${stageNumber}Icon`);
+        const iconElement = icon.querySelector('i');
+        
+        // Add active state
+        icon.className = 'flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 border-4 border-blue-200 shadow-lg z-10 transition-all duration-500';
+        
+        // Add spinning animation
+        iconElement.classList.add('fa-spin');
+        iconElement.className = iconElement.className.replace('text-gray-400', 'text-blue-600');
+    }
+
+    completeStage(stageNumber) {
+        const icon = document.getElementById(`stage${stageNumber}Icon`);
+        const iconElement = icon.querySelector('i');
+        
+        // Remove spinning and add completed state
+        iconElement.classList.remove('fa-spin');
+        icon.className = 'flex items-center justify-center w-16 h-16 rounded-full bg-green-100 border-4 border-green-200 shadow-lg z-10 transition-all duration-500';
+        iconElement.className = iconElement.className.replace('text-blue-600', 'text-green-600');
+        
+        // Change icon to checkmark
+        iconElement.className = iconElement.className.replace(/fa-[^ ]+/, 'fa-check');
+    }
+
+    animateStageProgress(stageNumber, steps, duration, onComplete) {
+        const progressBar = document.getElementById(`stage${stageNumber}Progress`);
+        const statusElement = document.getElementById(`stage${stageNumber}Status`);
+        
+        let currentStep = 0;
+        const stepDuration = duration / steps.length;
+        
+        const updateStep = () => {
+            if (currentStep < steps.length) {
+                statusElement.textContent = steps[currentStep];
+                
+                const progress = ((currentStep + 1) / steps.length) * 100;
+                progressBar.style.width = `${progress}%`;
+                
+                currentStep++;
+                setTimeout(updateStep, stepDuration);
+            } else {
+                onComplete();
+            }
+        };
+        
+        updateStep();
+    }
+
+    updateOverallProgress(percentage) {
+        document.getElementById('overallProgressBar').style.width = `${percentage}%`;
+        document.getElementById('overallProgressText').textContent = `${percentage}%`;
+        
+        // Update estimated time based on progress
+        const remainingTime = Math.max(0, Math.round((100 - percentage) * 0.4));
+        if (remainingTime > 0) {
+            document.getElementById('estimatedTime').textContent = `${remainingTime} seconds remaining`;
+        } else {
+            document.getElementById('estimatedTime').textContent = 'Almost done...';
+        }
     }
 
     hideProgress() {
-        document.getElementById('progressSection').classList.add('hidden');
+        // Show completion animation before hiding
+        this.showCompletionAnimation(() => {
+            document.getElementById('progressSection').classList.add('hidden');
+        });
+    }
+
+    showCompletionAnimation(callback) {
+        // Update main text to completion
+        document.getElementById('progressText').textContent = 'Research completed successfully!';
+        
+        // Final progress update
+        this.updateOverallProgress(100);
+        document.getElementById('progressLine').style.height = '100%';
+        
+        // Add success animation to overall progress bar
+        const overallBar = document.getElementById('overallProgressBar');
+        overallBar.className = 'bg-gradient-to-r from-green-600 to-green-700 h-3 rounded-full transition-all duration-500';
+        
+        // Update estimated time
+        document.getElementById('estimatedTime').textContent = 'Complete!';
+        
+        // Wait for animation to complete
+        setTimeout(() => {
+            callback();
+        }, 1500);
     }
 
     showError(message) {

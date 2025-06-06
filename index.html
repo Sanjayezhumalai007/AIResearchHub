@@ -81,16 +81,131 @@
         </div>
 
         <!-- Progress Section -->
-        <div id="progressSection" class="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-8 mb-8 hidden">
-            <div class="text-center">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-                    <i class="fas fa-spinner fa-spin text-blue-600 text-2xl"></i>
+        <div id="progressSection" class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-8 mb-8 hidden">
+            <div class="text-center mb-6">
+                <h3 class="text-xl font-medium text-gray-800 mb-2">AI Research in Progress</h3>
+                <p id="progressText" class="text-gray-600">Initializing research pipeline...</p>
+            </div>
+
+            <!-- Progress Steps -->
+            <div class="relative">
+                <!-- Progress Line -->
+                <div class="absolute left-8 top-0 h-full w-0.5 bg-gray-200"></div>
+                <div id="progressLine" class="absolute left-8 top-0 w-0.5 bg-blue-600 transition-all duration-1000" style="height: 0%"></div>
+
+                <!-- Stage 1: Website Analysis -->
+                <div class="relative flex items-center mb-8">
+                    <div id="stage1Icon" class="flex items-center justify-center w-16 h-16 rounded-full bg-gray-200 border-4 border-white shadow-lg z-10 transition-all duration-500">
+                        <i class="fas fa-globe text-gray-400 text-xl"></i>
+                    </div>
+                    <div class="ml-6 flex-1">
+                        <h4 class="text-lg font-medium text-gray-800">Website Analysis</h4>
+                        <p class="text-gray-600">Extracting content and company information</p>
+                        <div class="mt-2">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="stage1Progress" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div id="stage1Details" class="mt-2 text-sm text-gray-500 hidden">
+                            <div id="stage1Status"></div>
+                        </div>
+                    </div>
                 </div>
-                <h3 class="text-lg font-medium text-gray-800 mb-2">Research in Progress</h3>
-                <p id="progressText" class="text-gray-600 mb-4">Initializing...</p>
-                <div class="w-full bg-gray-200 rounded-full h-2">
-                    <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+
+                <!-- Stage 2: Content Processing -->
+                <div class="relative flex items-center mb-8">
+                    <div id="stage2Icon" class="flex items-center justify-center w-16 h-16 rounded-full bg-gray-200 border-4 border-white shadow-lg z-10 transition-all duration-500">
+                        <i class="fas fa-cogs text-gray-400 text-xl"></i>
+                    </div>
+                    <div class="ml-6 flex-1">
+                        <h4 class="text-lg font-medium text-gray-800">Content Processing</h4>
+                        <p class="text-gray-600">Cleaning and structuring extracted data</p>
+                        <div class="mt-2">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="stage2Progress" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div id="stage2Details" class="mt-2 text-sm text-gray-500 hidden">
+                            <div id="stage2Status"></div>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Stage 3: External Research -->
+                <div class="relative flex items-center mb-8">
+                    <div id="stage3Icon" class="flex items-center justify-center w-16 h-16 rounded-full bg-gray-200 border-4 border-white shadow-lg z-10 transition-all duration-500">
+                        <i class="fas fa-search text-gray-400 text-xl"></i>
+                    </div>
+                    <div class="ml-6 flex-1">
+                        <h4 class="text-lg font-medium text-gray-800">External Research</h4>
+                        <p class="text-gray-600">Gathering additional data from external sources</p>
+                        <div class="mt-2">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="stage3Progress" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div id="stage3Details" class="mt-2 text-sm text-gray-500 hidden">
+                            <div id="stage3Status"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stage 4: AI Analysis -->
+                <div class="relative flex items-center mb-8">
+                    <div id="stage4Icon" class="flex items-center justify-center w-16 h-16 rounded-full bg-gray-200 border-4 border-white shadow-lg z-10 transition-all duration-500">
+                        <i class="fas fa-brain text-gray-400 text-xl"></i>
+                    </div>
+                    <div class="ml-6 flex-1">
+                        <h4 class="text-lg font-medium text-gray-800">AI Analysis</h4>
+                        <p class="text-gray-600">Synthesizing data with Gemini AI</p>
+                        <div class="mt-2">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="stage4Progress" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div id="stage4Details" class="mt-2 text-sm text-gray-500 hidden">
+                            <div id="stage4Status"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stage 5: Report Generation -->
+                <div class="relative flex items-center">
+                    <div id="stage5Icon" class="flex items-center justify-center w-16 h-16 rounded-full bg-gray-200 border-4 border-white shadow-lg z-10 transition-all duration-500">
+                        <i class="fas fa-file-alt text-gray-400 text-xl"></i>
+                    </div>
+                    <div class="ml-6 flex-1">
+                        <h4 class="text-lg font-medium text-gray-800">Report Generation</h4>
+                        <p class="text-gray-600">Finalizing comprehensive company profile</p>
+                        <div class="mt-2">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="stage5Progress" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div id="stage5Details" class="mt-2 text-sm text-gray-500 hidden">
+                            <div id="stage5Status"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Overall Progress -->
+            <div class="mt-8 pt-6 border-t border-gray-200">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-gray-700">Overall Progress</span>
+                    <span id="overallProgressText" class="text-sm text-gray-600">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3">
+                    <div id="overallProgressBar" class="bg-gradient-to-r from-blue-600 to-blue-700 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Estimated Time -->
+            <div class="mt-4 text-center">
+                <p class="text-sm text-gray-500">
+                    <i class="fas fa-clock mr-1"></i>
+                    Estimated time: <span id="estimatedTime">30-45 seconds</span>
+                </p>
             </div>
         </div>
 
