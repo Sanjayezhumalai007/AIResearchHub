@@ -7,6 +7,7 @@ import json
 from urllib.parse import urlparse
 import google.generativeai as genai
 from datetime import datetime
+import time
 
 app = Flask(__name__)
 CORS(app)
@@ -520,164 +521,128 @@ CRITICAL INSTRUCTIONS:
 
 JSON Response:"""
 
-    try:
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.1,
-                top_k=1,
-                top_p=1,
-                max_output_tokens=2048,
-            )
-        )
-        
-        response_text = response.text.strip()
-        
-        # Clean up the response
-        response_text = re.sub(r'^```(?:json)?\s*', '', response_text, flags=re.IGNORECASE)
-        response_text = re.sub(r'\s*```$', '', response_text, flags=re.IGNORECASE)
-        response_text = response_text.replace('`', '')
-        
-        # Find JSON object
-        first_brace = response_text.find('{')
-        last_brace = response_text.rfind('}')
-        
-        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-            response_text = response_text[first_brace:last_brace + 1]
-        
-        # Additional cleanup
-        response_text = re.sub(r'\n\s*\n', '\n', response_text)
-        response_text = response_text.replace('\\`', '`')
-        response_text = response_text.replace('\\\\', '\\')
-        
+    max_retries = 3
+    retry_delay = 20  # seconds
+    last_error = None
+
+    for attempt in range(max_retries):
         try:
-            company_profile = json.loads(response_text)
-            return company_profile
-        except json.JSONDecodeError as e:
-            # Try additional cleanup
-            cleaned_text = re.sub(r'[\u0000-\u001F\u007F-\u009F]', '', response_text)
-            cleaned_text = cleaned_text.replace('\\n', '\\\\n')
-            cleaned_text = cleaned_text.replace('\\"', '\\"')
-            cleaned_text = cleaned_text.replace("\\'", "'")
+            model = genai.GenerativeModel('gemini-1.5-flash-latest')
+            
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.1,
+                    top_k=1,
+                    top_p=1,
+                    max_output_tokens=2048,
+                )
+            )
+            
+            response_text = response.text.strip()
+            
+            # Clean up the response
+            response_text = response_text.replace('```json', '').replace('```', '').strip()
+            
+            # Find the JSON object
+            first_brace = response_text.find('{')
+            last_brace = response_text.rfind('}')
+            
+            if first_brace != -1 and last_brace != -1:
+                response_text = response_text[first_brace:last_brace + 1]
             
             try:
-                company_profile = json.loads(cleaned_text)
-                return company_profile
-            except json.JSONDecodeError:
-                raise Exception(f"Failed to parse AI response as JSON: {str(e)}")
-        
-    except Exception as e:
-        raise Exception(f"AI synthesis failed: {str(e)}")
+                return json.loads(response_text)
+            except json.JSONDecodeError as e:
+                last_error = f"Failed to parse AI response as JSON: {str(e)}"
+                continue
+                
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str and "quota" in error_str.lower():
+                if attempt < max_retries - 1:
+                    print(f"Rate limit hit, waiting {retry_delay} seconds before retry...")
+                    time.sleep(retry_delay)
+                    continue
+            last_error = f"AI synthesis failed: {error_str}"
+    
+    # If we get here, all retries failed
+    raise Exception(last_error or "AI synthesis failed after multiple attempts")
 
 @app.route('/api/research-agent', methods=['POST', 'OPTIONS'])
 def research_agent():
-    # Handle CORS preflight
+    """Handle research agent API requests"""
+    # Enable CORS
+    headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+    }
+    
+    # Handle preflight requests
     if request.method == 'OPTIONS':
-        return jsonify({}), 200
+        return '', 200, headers
     
     try:
-        print("Received research request")
-        
+        # Get request data
         data = request.get_json()
         if not data:
-            print("No JSON data received")
-            return jsonify({'error': 'Invalid JSON in request body'}), 400
-        
-        print(f"Request data: {data}")
+            return jsonify({'error': 'No data provided'}), 400, headers
         
         website_url = data.get('websiteUrl')
-        max_pages = data.get('maxPages', 5)
-        include_external = data.get('includeExternal', True)
-        
         if not website_url:
-            print("No website URL provided")
-            return jsonify({'error': 'Website URL is required'}), 400
+            return jsonify({'error': 'Website URL is required'}), 400, headers
         
-        print(f"Processing URL: {website_url}")
-        
-        # Get API keys from environment
+        # Get API keys
         gemini_api_key = "AIzaSyBrcXjJl74fJwtDLgVtZJ3UrEEjUCgaK1U"
         tavily_api_key = "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"
         
-        print(f"API Keys - Gemini: {'✓' if gemini_api_key else '✗'}, Tavily: {'✓' if tavily_api_key else '✗'}")
-        
         if not gemini_api_key:
-            error_msg = 'Gemini API key not configured. Please add GEMINI_API_KEY to your Secrets in the Tools panel.'
-            print(f"Error: {error_msg}")
-            return jsonify({'error': error_msg}), 400
+            return jsonify({'error': 'Gemini API key not configured'}), 400, headers
         
-        # Step 1: Scrape website content
-        print("Step 1: Fetching website content...")
+        # Scrape website
         try:
             response = fetch_with_timeout(website_url)
             if not response.ok:
-                error_msg = f'Website returned error: {response.status_code}'
-                print(f"Website fetch error: {error_msg}")
-                return jsonify({'error': error_msg}), 500
-            print("Website content fetched successfully")
+                return jsonify({'error': f'Failed to fetch website: {response.status_code}'}), 500, headers
+            
+            html_content = response.text
+            text_content = extract_text_from_html(html_content)
+            
+            scraped_data = {
+                'url': website_url,
+                'company_name': extract_company_name(website_url, html_content),
+                'content': text_content,
+                'emails': extract_emails(text_content)
+            }
+            
         except Exception as e:
-            error_msg = f'Failed to fetch website: {str(e)}'
-            print(f"Website fetch exception: {error_msg}")
-            return jsonify({'error': error_msg}), 500
+            return jsonify({'error': f'Website scraping failed: {str(e)}'}), 500, headers
         
-        # Check content length
-        content_length = response.headers.get('content-length')
-        if content_length and int(content_length) > 5000000:  # 5MB limit
-            return jsonify({'error': 'Website content too large to process'}), 500
-        
-        html_content = response.text
-        
-        # Limit HTML content size
-        if len(html_content) > 1000000:
-            html_content = html_content[:1000000]
-        
-        text_content = extract_text_from_html(html_content)
-        
-        scraped_data = {
-            'base_url': website_url,
-            'company_name': extract_company_name(website_url, html_content),
-            'content': text_content[:8000],  # Limit for better analysis
-            'emails': extract_emails(text_content),
-            'scraped_pages_count': 1
-        }
-        
-        # Step 2: External research
+        # Perform external research
         external_data = {}
-        if include_external and tavily_api_key:
+        if tavily_api_key:
             try:
                 external_data = perform_external_research(scraped_data['company_name'], tavily_api_key)
             except Exception as e:
-                external_data = {'error': f'External research failed: {str(e)}'}
-        else:
-            external_data = {'error': 'External research skipped - no Tavily API key'}
+                print(f"External research failed: {str(e)}")
+                external_data = {'error': str(e)}
         
-        # Step 3: AI synthesis
-        print("Step 3: AI synthesis...")
+        # Synthesize with AI
         try:
             company_profile = synthesize_with_ai(scraped_data, external_data, gemini_api_key)
-            print("AI synthesis completed successfully")
+            return jsonify(company_profile), 200, headers
         except Exception as e:
-            error_msg = f'AI analysis failed: {str(e)}'
-            print(f"AI synthesis error: {error_msg}")
-            return jsonify({'error': error_msg}), 500
-        
-        # Step 4: Finalize profile
-        print("Step 4: Finalizing profile...")
-        company_profile['website_url'] = website_url
-        company_profile['last_updated'] = '2024-01-20'  # Current date
-        
-        if 'confidence_score' not in company_profile:
-            company_profile['confidence_score'] = 'Medium'
-        
-        print("Research completed successfully")
-        return jsonify(company_profile)
-        
+            error_msg = str(e)
+            if "429" in error_msg and "quota" in error_msg.lower():
+                return jsonify({
+                    'error': 'API rate limit exceeded. Please try again in a few minutes.',
+                    'details': error_msg
+                }), 429, headers
+            return jsonify({'error': f'AI analysis failed: {error_msg}'}), 500, headers
+            
     except Exception as e:
-        error_msg = f'Research failed: {str(e)}'
-        print(f"Unexpected error: {error_msg}")
-        return jsonify({'error': error_msg}), 500
+        return jsonify({'error': f'Research failed: {str(e)}'}), 500, headers
 
 @app.route('/api/test')
 def test_api():
