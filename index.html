@@ -442,44 +442,74 @@
 
     <script src="script.js"></script>
     <script>
-    document.getElementById('calculateValuationBtn').addEventListener('click', async function() {
-        // TODO: Replace with dynamic values if available
-        const revenue = "$124.2M"; // Replace with dynamic value if needed
-        const industry = "software"; // Replace with dynamic value if needed
+    document.addEventListener('DOMContentLoaded', () => {
+        const industryMultiples = {
+            'saas': 10, 'fintech': 12, 'software': 8, 'ai': 15, 'health': 7,
+            'ecommerce': 1.5, 'retail': 1, 'marketplace': 5, 'hardware': 3,
+            'agency': 2, 'consulting': 2, 'default': 3
+        };
 
-        // Show loading state
-        const resultDiv = document.getElementById('valuationResult');
-        const contentDiv = document.getElementById('valuationContent');
-        resultDiv.classList.remove('hidden');
-        contentDiv.innerHTML = "Calculating...";
-
-        try {
-            const response = await fetch('/api/calculate-industry-valuation', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    company_details: { industry: industry },
-                    valuation_and_revenue: {
-                        supporting_metrics: {
-                            revenue: revenue
-                            // Optionally add growth_rate: "20%" if available
-                        }
-                    }
-                })
-            });
-            const data = await response.json();
-            if (data.error) {
-                contentDiv.innerHTML = `<span class="text-red-600">${data.error}</span>`;
-            } else {
-                contentDiv.innerHTML = `
-                    <div><b>Estimated Value:</b> ${data.calculated_value}</div>
-                    <div class="mt-2"><b>Methodology:</b> <pre>${JSON.stringify(data.methodology, null, 2)}</pre></div>
-                    <div class="mt-2"><b>Calculation Steps:</b> <pre>${JSON.stringify(data.calculation_steps, null, 2)}</pre></div>
-                `;
-            }
-        } catch (err) {
-            contentDiv.innerHTML = `<span class="text-red-600">Failed to calculate valuation.</span>`;
+        function parseRevenue(revenueString) {
+            if (!revenueString || typeof revenueString !== 'string') return null;
+            const str = revenueString.toLowerCase();
+            const numPart = parseFloat(str.replace(/[^0-9.]/g, ''));
+            if (isNaN(numPart)) return null;
+            if (str.includes('b')) return numPart * 1_000_000_000;
+            if (str.includes('m')) return numPart * 1_000_000;
+            if (str.includes('k')) return numPart * 1_000;
+            if (numPart < 1000) return numPart * 1_000_000;
+            return numPart;
         }
+
+        function getIndustryMultiple(industry) {
+            if (!industry) return { multiple: industryMultiples.default, key: 'default' };
+            const industryLower = industry.toLowerCase();
+            for (const key in industryMultiples) {
+                if (industryLower.includes(key)) {
+                    return { multiple: industryMultiples[key], key: key };
+                }
+            }
+            return { multiple: industryMultiples.default, key: 'default' };
+        }
+
+        function formatCurrency(number) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+            }).format(number);
+        }
+
+        const calculateBtn = document.getElementById('calculateValuationBtn');
+        const resultContainer = document.getElementById('valuationCalculationResult');
+
+        calculateBtn.addEventListener('click', () => {
+            if (typeof window.companyProfile === 'undefined') {
+                alert('Error: Company profile data not found. Please generate a profile first.');
+                return;
+            }
+            const { company_details, valuation_and_revenue } = window.companyProfile;
+            if (!valuation_and_revenue || !valuation_and_revenue.value) {
+                alert('Cannot calculate valuation. Revenue figure not found.');
+                return;
+            }
+            const numericRevenue = parseRevenue(valuation_and_revenue.value);
+            if (!numericRevenue) {
+                alert(`Could not parse the revenue figure: "${valuation_and_revenue.value}".`);
+                return;
+            }
+            const industry = company_details?.industry || 'Unknown';
+            const { multiple, key } = getIndustryMultiple(industry);
+            const calculatedValuation = numericRevenue * multiple;
+
+            document.getElementById('calc-industry').textContent = `${industry} (matched on '${key}')`;
+            document.getElementById('calc-revenue').textContent = `${formatCurrency(numericRevenue)} (from "${valuation_and_revenue.value}")`;
+            document.getElementById('calc-multiple').textContent = `${multiple}x`;
+            document.getElementById('calc-valuation').textContent = formatCurrency(calculatedValuation);
+
+            resultContainer.classList.remove('hidden');
+        });
     });
     </script>
 </body>
