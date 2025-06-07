@@ -880,6 +880,151 @@ def estimate_ai_tokens(report):
     report_str = json.dumps(report)
     return len(report_str) // 4
 
+def calculate_industry_specific_valuation(company_data):
+    """Calculate industry-specific valuation with detailed methodology"""
+    try:
+        # Initialize valuation result
+        valuation_result = {
+            'calculated_value': None,
+            'methodology': [],
+            'confidence': 'Low',
+            'supporting_metrics': {},
+            'industry_analysis': {},
+            'calculation_steps': []
+        }
+        
+        # Extract required metrics
+        revenue = None
+        growth_rate = None
+        industry = company_data.get('company_details', {}).get('industry', '').lower()
+        
+        # Get revenue from valuation data
+        if company_data.get('valuation_and_revenue', {}).get('supporting_metrics', {}).get('revenue'):
+            revenue_str = company_data['valuation_and_revenue']['supporting_metrics']['revenue']
+            revenue = convert_revenue_to_number(revenue_str)
+            valuation_result['calculation_steps'].append({
+                'step': 'Revenue Extraction',
+                'value': revenue_str,
+                'converted_value': revenue
+            })
+        
+        # Get growth rate
+        if company_data.get('valuation_and_revenue', {}).get('supporting_metrics', {}).get('growth_rate'):
+            growth_rate_str = company_data['valuation_and_revenue']['supporting_metrics']['growth_rate']
+            growth_rate = float(growth_rate_str.strip('%')) / 100 if '%' in growth_rate_str else float(growth_rate_str)
+            valuation_result['calculation_steps'].append({
+                'step': 'Growth Rate Extraction',
+                'value': growth_rate_str,
+                'converted_value': growth_rate
+            })
+        
+        # Get industry multiple
+        industry_multiple = calculate_industry_multiple(industry)
+        valuation_result['calculation_steps'].append({
+            'step': 'Industry Multiple Selection',
+            'industry': industry,
+            'multiple': industry_multiple
+        })
+        
+        # Calculate base valuation
+        if revenue and industry_multiple:
+            base_valuation = revenue * industry_multiple
+            valuation_result['methodology'].append({
+                'type': 'revenue_based',
+                'value': base_valuation,
+                'calculation': f"{revenue} * {industry_multiple}",
+                'weight': 0.6
+            })
+            valuation_result['calculation_steps'].append({
+                'step': 'Base Valuation',
+                'calculation': f"{revenue} * {industry_multiple}",
+                'result': base_valuation
+            })
+        
+        # Calculate growth-adjusted valuation
+        if growth_rate and revenue:
+            growth_multiplier = 1 + (growth_rate * 2)
+            growth_valuation = revenue * industry_multiple * growth_multiplier
+            valuation_result['methodology'].append({
+                'type': 'growth_adjusted',
+                'value': growth_valuation,
+                'calculation': f"{revenue} * {industry_multiple} * {growth_multiplier}",
+                'weight': 0.4
+            })
+            valuation_result['calculation_steps'].append({
+                'step': 'Growth Adjustment',
+                'calculation': f"Base * (1 + {growth_rate*2})",
+                'result': growth_valuation
+            })
+        
+        # Calculate final weighted valuation
+        if valuation_result['methodology']:
+            total_weight = 0
+            weighted_sum = 0
+            
+            for method in valuation_result['methodology']:
+                total_weight += method['weight']
+                weighted_sum += method['value'] * method['weight']
+            
+            final_valuation = weighted_sum / total_weight if total_weight > 0 else None
+            
+            valuation_result['calculated_value'] = format_currency(final_valuation)
+            valuation_result['confidence'] = 'High' if revenue and industry_multiple else 'Medium'
+            valuation_result['supporting_metrics'] = {
+                'revenue': format_currency(revenue) if revenue else None,
+                'growth_rate': f"{growth_rate*100:.1f}%" if growth_rate else None,
+                'industry_multiple': industry_multiple,
+                'industry': industry
+            }
+            
+            valuation_result['calculation_steps'].append({
+                'step': 'Final Weighted Valuation',
+                'calculation': 'Weighted average of methodologies',
+                'result': final_valuation
+            })
+        
+        return valuation_result
+        
+    except Exception as e:
+        return {
+            'error': f'Valuation calculation failed: {str(e)}',
+            'details': str(e)
+        }
+
+@app.route('/api/calculate-industry-valuation', methods=['POST', 'OPTIONS'])
+def calculate_industry_valuation_endpoint():
+    """Calculate industry-specific valuation endpoint"""
+    # Enable CORS
+    headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+    }
+    
+    # Handle preflight requests
+    if request.method == 'OPTIONS':
+        return '', 200, headers
+    
+    try:
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400, headers
+        
+        # Calculate valuation
+        result = calculate_industry_specific_valuation(data)
+        
+        if 'error' in result:
+            return jsonify(result), 400, headers
+        
+        return jsonify(result), 200, headers
+        
+    except Exception as e:
+        return jsonify({
+            'error': f'Valuation calculation failed: {str(e)}',
+            'details': str(e)
+        }), 500, headers
+
 @app.route('/api/calculate-valuation', methods=['POST', 'OPTIONS'])
 def calculate_valuation():
     """Calculate industry-specific valuation"""
