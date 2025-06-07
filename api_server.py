@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import google.generativeai as genai
 from datetime import datetime
 import time
+import traceback
 
 app = Flask(__name__)
 CORS(app)
@@ -377,9 +378,9 @@ def synthesize_with_ai(scraped_data, external_data, gemini_api_key):
         'revenue': None
     }
     
-    if external_data.get('financial_info'):
+    if isinstance(external_data, dict) and external_data.get('financial_info'):
         for result in external_data['financial_info']:
-            if result.get('extracted_metrics'):
+            if isinstance(result, dict) and result.get('extracted_metrics'):
                 for metric_type, values in result['extracted_metrics'].items():
                     if values and (not financial_metrics[metric_type] or 
                                  (values[0].get('date') and 
@@ -395,7 +396,7 @@ def synthesize_with_ai(scraped_data, external_data, gemini_api_key):
     }
     
     # Extract company info from scraped data
-    if scraped_data.get('content'):
+    if isinstance(scraped_data, dict) and scraped_data.get('content'):
         # Look for industry mentions
         industry_patterns = [
             r'industry:\s*([^\.]+)',
@@ -539,6 +540,9 @@ JSON Response:"""
                 )
             )
             
+            if not hasattr(response, 'text'):
+                raise Exception("Invalid response format from Gemini API")
+                
             response_text = response.text.strip()
             
             # Clean up the response
@@ -568,6 +572,347 @@ JSON Response:"""
     
     # If we get here, all retries failed
     raise Exception(last_error or "AI synthesis failed after multiple attempts")
+
+def calculate_industry_valuation(company_data):
+    """Calculate industry-specific valuation based on company data"""
+    try:
+        # Extract required metrics
+        revenue = None
+        growth_rate = None
+        industry = company_data.get('company_details', {}).get('industry', '').lower()
+        
+        # Get revenue from valuation data if available
+        if company_data.get('valuation_and_revenue', {}).get('supporting_metrics', {}).get('revenue'):
+            revenue_str = company_data['valuation_and_revenue']['supporting_metrics']['revenue']
+            # Convert revenue string to number (handle formats like "$1.2M", "500K", etc.)
+            revenue = convert_revenue_to_number(revenue_str)
+        
+        # Get growth rate
+        if company_data.get('valuation_and_revenue', {}).get('supporting_metrics', {}).get('growth_rate'):
+            growth_rate_str = company_data['valuation_and_revenue']['supporting_metrics']['growth_rate']
+            growth_rate = float(growth_rate_str.strip('%')) / 100 if '%' in growth_rate_str else float(growth_rate_str)
+        
+        # Get industry multiple
+        industry_multiple = calculate_industry_multiple(industry, growth_rate)
+        
+        # Calculate valuation
+        valuation = None
+        methodology = []
+        
+        if revenue and industry_multiple:
+            # Revenue-based valuation
+            revenue_valuation = revenue * industry_multiple
+            methodology.append({
+                'type': 'revenue_based',
+                'value': revenue_valuation,
+                'multiple': industry_multiple,
+                'revenue': revenue
+            })
+        
+        if growth_rate and revenue:
+            # Growth-adjusted valuation
+            growth_multiplier = 1 + (growth_rate * 2)  # Double the growth rate impact
+            growth_valuation = revenue * industry_multiple * growth_multiplier
+            methodology.append({
+                'type': 'growth_adjusted',
+                'value': growth_valuation,
+                'growth_rate': growth_rate,
+                'growth_multiplier': growth_multiplier
+            })
+        
+        # Calculate final valuation (weighted average of methodologies)
+        if methodology:
+            total_weight = 0
+            weighted_sum = 0
+            
+            for method in methodology:
+                if method['type'] == 'revenue_based':
+                    weight = 0.6  # Higher weight for revenue-based
+                else:
+                    weight = 0.4  # Lower weight for growth-adjusted
+                
+                total_weight += weight
+                weighted_sum += method['value'] * weight
+            
+            final_valuation = weighted_sum / total_weight if total_weight > 0 else None
+            
+            return {
+                'valuation': format_currency(final_valuation),
+                'methodology': methodology,
+                'confidence': 'High' if revenue and industry_multiple else 'Medium',
+                'supporting_metrics': {
+                    'revenue': format_currency(revenue) if revenue else None,
+                    'growth_rate': f"{growth_rate*100:.1f}%" if growth_rate else None,
+                    'industry_multiple': industry_multiple,
+                    'industry': industry
+                }
+            }
+        
+        return {
+            'error': 'Insufficient data for valuation calculation',
+            'required_metrics': {
+                'revenue': bool(revenue),
+                'industry': bool(industry),
+                'growth_rate': bool(growth_rate)
+            }
+        }
+        
+    except Exception as e:
+        return {
+            'error': f'Valuation calculation failed: {str(e)}',
+            'details': str(e)
+        }
+
+def convert_revenue_to_number(revenue_str):
+    """Convert revenue string to number"""
+    try:
+        # Remove currency symbols and whitespace
+        revenue_str = revenue_str.strip().replace('$', '').replace('€', '').replace('£', '').strip()
+        
+        # Handle different formats
+        if 'B' in revenue_str or 'billion' in revenue_str.lower():
+            return float(revenue_str.replace('B', '').replace('billion', '').strip()) * 1e9
+        elif 'M' in revenue_str or 'million' in revenue_str.lower():
+            return float(revenue_str.replace('M', '').replace('million', '').strip()) * 1e6
+        elif 'K' in revenue_str or 'thousand' in revenue_str.lower():
+            return float(revenue_str.replace('K', '').replace('thousand', '').strip()) * 1e3
+        else:
+            return float(revenue_str)
+    except:
+        return None
+
+def format_currency(value):
+    """Format number as currency string"""
+    if value is None:
+        return None
+    if value >= 1e9:
+        return f"${value/1e9:.2f}B"
+    elif value >= 1e6:
+        return f"${value/1e6:.2f}M"
+    elif value >= 1e3:
+        return f"${value/1e3:.2f}K"
+    else:
+        return f"${value:.2f}"
+
+def generate_company_report(company_data, research_data, valuation_data):
+    """Generate comprehensive company report"""
+    try:
+        # Validate input data
+        if not isinstance(company_data, dict):
+            company_data = {}
+        if not isinstance(research_data, dict):
+            research_data = {}
+        if not isinstance(valuation_data, dict):
+            valuation_data = {}
+
+        # Initialize report structure
+        report = {
+            'metadata': {
+                'generated_at': datetime.now().isoformat(),
+                'version': '1.0',
+                'data_points': 0,
+                'ai_tokens_used': 0,
+                'pages_processed': 0
+            },
+            'company_profile': {
+                'basic_info': {},
+                'financial_metrics': {},
+                'market_analysis': {},
+                'competitor_analysis': {},
+                'risk_assessment': {},
+                'growth_metrics': {}
+            },
+            'valuation_analysis': {},
+            'data_quality': {
+                'confidence_scores': {},
+                'data_sources': [],
+                'verification_status': {}
+            }
+        }
+        
+        # Extract and organize basic information
+        if isinstance(company_data, dict):
+            report['company_profile']['basic_info'] = {
+                'name': company_data.get('company_name'),
+                'website': company_data.get('website_url'),
+                'industry': company_data.get('company_details', {}).get('industry') if isinstance(company_data.get('company_details'), dict) else None,
+                'founded_year': company_data.get('company_details', {}).get('founded_year') if isinstance(company_data.get('company_details'), dict) else None,
+                'headquarters': company_data.get('company_details', {}).get('headquarters') if isinstance(company_data.get('company_details'), dict) else None,
+                'company_type': company_data.get('company_details', {}).get('company_type') if isinstance(company_data.get('company_details'), dict) else None
+            }
+        
+        # Process financial metrics
+        if isinstance(company_data, dict) and isinstance(company_data.get('valuation_and_revenue'), dict):
+            financial_data = company_data['valuation_and_revenue']
+            report['company_profile']['financial_metrics'] = {
+                'current_valuation': financial_data.get('value'),
+                'valuation_methodology': financial_data.get('methodology'),
+                'revenue': financial_data.get('supporting_metrics', {}).get('revenue') if isinstance(financial_data.get('supporting_metrics'), dict) else None,
+                'growth_rate': financial_data.get('supporting_metrics', {}).get('growth_rate') if isinstance(financial_data.get('supporting_metrics'), dict) else None,
+                'industry_multiple': financial_data.get('supporting_metrics', {}).get('industry_multiple') if isinstance(financial_data.get('supporting_metrics'), dict) else None
+            }
+        
+        # Add valuation analysis
+        if isinstance(valuation_data, dict):
+            report['valuation_analysis'] = {
+                'calculated_valuation': valuation_data.get('valuation'),
+                'methodology_breakdown': valuation_data.get('methodology'),
+                'confidence_level': valuation_data.get('confidence'),
+                'supporting_metrics': valuation_data.get('supporting_metrics') if isinstance(valuation_data.get('supporting_metrics'), dict) else {}
+            }
+        
+        # Process market analysis
+        if isinstance(research_data, dict) and isinstance(research_data.get('market_info'), dict):
+            market_info = research_data['market_info']
+            report['company_profile']['market_analysis'] = {
+                'market_size': market_info.get('market_size'),
+                'market_growth': market_info.get('market_growth'),
+                'market_trends': market_info.get('market_trends'),
+                'key_players': market_info.get('key_players')
+            }
+        
+        # Process competitor analysis
+        if isinstance(research_data, dict) and isinstance(research_data.get('competitor_info'), dict):
+            competitor_info = research_data['competitor_info']
+            report['company_profile']['competitor_analysis'] = {
+                'direct_competitors': competitor_info.get('direct_competitors'),
+                'competitive_advantages': competitor_info.get('competitive_advantages'),
+                'market_position': competitor_info.get('market_position')
+            }
+        
+        # Calculate data quality metrics
+        report['data_quality']['confidence_scores'] = {
+            'financial_data': calculate_confidence_score(company_data.get('valuation_and_revenue') if isinstance(company_data, dict) else None),
+            'market_data': calculate_confidence_score(research_data.get('market_info') if isinstance(research_data, dict) else None),
+            'competitor_data': calculate_confidence_score(research_data.get('competitor_info') if isinstance(research_data, dict) else None),
+            'overall': calculate_overall_confidence(report)
+        }
+        
+        # Track data sources
+        report['data_quality']['data_sources'] = [
+            {'type': 'company_website', 'url': company_data.get('website_url') if isinstance(company_data, dict) else None},
+            {'type': 'market_research', 'source': 'Tavily API'},
+            {'type': 'valuation_analysis', 'source': 'Industry Multiples'}
+        ]
+        
+        # Calculate metadata
+        report['metadata']['data_points'] = count_data_points(report)
+        report['metadata']['pages_processed'] = 1  # Base website + external sources
+        report['metadata']['ai_tokens_used'] = estimate_ai_tokens(report)
+        
+        return report
+        
+    except Exception as e:
+        return {
+            'error': f'Report generation failed: {str(e)}',
+            'details': str(e),
+            'input_data': {
+                'company_data_type': str(type(company_data)),
+                'research_data_type': str(type(research_data)),
+                'valuation_data_type': str(type(valuation_data))
+            }
+        }
+
+def calculate_confidence_score(data):
+    """Calculate confidence score for data section"""
+    if not data or not isinstance(data, dict):
+        return 'Low'
+    
+    # Count non-null values
+    non_null_count = sum(1 for v in data.values() if v is not None)
+    total_fields = len(data)
+    
+    if total_fields == 0:
+        return 'Low'
+    
+    if non_null_count / total_fields >= 0.8:
+        return 'High'
+    elif non_null_count / total_fields >= 0.5:
+        return 'Medium'
+    return 'Low'
+
+def calculate_overall_confidence(report):
+    """Calculate overall confidence score"""
+    if not isinstance(report, dict) or 'data_quality' not in report or 'confidence_scores' not in report['data_quality']:
+        return 'Low'
+        
+    confidence_scores = report['data_quality']['confidence_scores']
+    if not isinstance(confidence_scores, dict):
+        return 'Low'
+        
+    score_map = {'High': 3, 'Medium': 2, 'Low': 1}
+    
+    valid_scores = [score_map[score] for score in confidence_scores.values() 
+                   if score != 'overall' and score in score_map]
+    
+    if not valid_scores:
+        return 'Low'
+        
+    avg_score = sum(valid_scores) / len(valid_scores)
+    
+    if avg_score >= 2.5:
+        return 'High'
+    elif avg_score >= 1.5:
+        return 'Medium'
+    return 'Low'
+
+def count_data_points(report):
+    """Count total data points in report"""
+    if not isinstance(report, dict) or 'company_profile' not in report:
+        return 0
+        
+    def count_dict(d):
+        if not isinstance(d, dict):
+            return 0
+        return sum(1 for v in d.values() if v is not None)
+    
+    total = 0
+    for section in report['company_profile'].values():
+        if isinstance(section, dict):
+            total += count_dict(section)
+    return total
+
+def estimate_ai_tokens(report):
+    """Estimate AI tokens used in report generation"""
+    if not isinstance(report, dict):
+        return 0
+    # Rough estimate: 1 token per 4 characters
+    report_str = json.dumps(report)
+    return len(report_str) // 4
+
+@app.route('/api/calculate-valuation', methods=['POST', 'OPTIONS'])
+def calculate_valuation():
+    """Calculate industry-specific valuation"""
+    # Enable CORS
+    headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+    }
+    
+    # Handle preflight requests
+    if request.method == 'OPTIONS':
+        return '', 200, headers
+    
+    try:
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400, headers
+        
+        # Calculate valuation
+        result = calculate_industry_valuation(data)
+        
+        if 'error' in result:
+            return jsonify(result), 400, headers
+        
+        return jsonify(result), 200, headers
+        
+    except Exception as e:
+        return jsonify({
+            'error': f'Valuation calculation failed: {str(e)}',
+            'details': str(e)
+        }), 500, headers
 
 @app.route('/api/research-agent', methods=['POST', 'OPTIONS'])
 def research_agent():
@@ -664,6 +1009,46 @@ def serve_index():
 @app.route('/<path:filename>')
 def serve_static(filename):
     return send_from_directory('.', filename)
+
+@app.route('/api/generate-report', methods=['POST', 'OPTIONS'])
+def generate_report():
+    """Generate comprehensive company report"""
+    # Enable CORS
+    headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS'
+    }
+    
+    # Handle preflight requests
+    if request.method == 'OPTIONS':
+        return '', 200, headers
+    
+    try:
+        # Get request data
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400, headers
+        
+        # Extract and validate input data
+        company_data = data.get('company_data', {})
+        research_data = data.get('research_data', {})
+        valuation_data = data.get('valuation_data', {})
+        
+        # Generate report
+        report = generate_company_report(company_data, research_data, valuation_data)
+        
+        if 'error' in report:
+            return jsonify(report), 400, headers
+        
+        return jsonify(report), 200, headers
+        
+    except Exception as e:
+        return jsonify({
+            'error': f'Report generation failed: {str(e)}',
+            'details': str(e),
+            'traceback': traceback.format_exc()
+        }), 500, headers
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
